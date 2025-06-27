@@ -120,4 +120,4 @@ Then visit: [http://localhost:5173](http://localhost:5173)
 
 ---
 
-Made with 💻 by \[Your Name]
+Made with 💻 by \[Gabriel Manialong]
