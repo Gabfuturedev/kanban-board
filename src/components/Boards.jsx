@@ -76,11 +76,26 @@ const Board = () => {
     });
   };
 
+  const updateTask = (columnId, taskId, newContent) => {
+  const column = columns[columnId];
+  const updatedItems = column.items.map((item) =>
+    item.id === taskId ? { ...item, content: newContent } : item
+  );
+  setColumns({
+    ...columns,
+    [columnId]: {
+      ...column,
+      items: updatedItems,
+    },
+  });
+};
+
+
   return (
     <DragDropContext onDragEnd={onDragEnd}>
       <div style={{ display: 'flex', gap: '1rem', padding: '1rem' }}>
         {Object.entries(columns).map(([id, column]) => (
-          <Column key={id} columnId={id} column={column} addTask={addTask} deleteTask={deleteTask} />
+          <Column key={id} columnId={id} column={column} addTask={addTask} deleteTask={deleteTask} updateTask={updateTask} />
         ))}
       </div>
     </DragDropContext>
