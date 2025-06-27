@@ -76,11 +76,12 @@ const Board = () => {
     });
   };
 
-  const updateTask = (columnId, taskId, newContent) => {
+  const updateTask = (columnId, taskId, updatedItem) => {
   const column = columns[columnId];
   const updatedItems = column.items.map((item) =>
-    item.id === taskId ? { ...item, content: newContent } : item
+    item.id === taskId ? { ...item, ...updatedItem } : item
   );
+
   setColumns({
     ...columns,
     [columnId]: {
