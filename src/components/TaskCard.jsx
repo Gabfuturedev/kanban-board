@@ -1,166 +1,183 @@
-import { useState } from "react";
-import { Draggable } from "@hello-pangea/dnd";
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Draggable } from '@hello-pangea/dnd';
+import { PRIORITIES, priorityForColor } from '../constants/priorities';
+import { PencilIcon, TrashIcon } from './icons';
+import './TaskCard.css';
 
-const urgencyOptions = {
-  Low: "grey",
-  Medium: "orange",
-  High: "red",
-  Done: "green",
+const formatRelativeTime = (timestamp) => {
+  if (!timestamp) return null;
+  const diffMs = Date.now() - timestamp;
+  const minute = 60_000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+
+  if (diffMs < minute) return 'just now';
+  if (diffMs < hour) return `${Math.floor(diffMs / minute)}m ago`;
+  if (diffMs < day) return `${Math.floor(diffMs / hour)}h ago`;
+  if (diffMs < 7 * day) return `${Math.floor(diffMs / day)}d ago`;
+  return new Date(timestamp).toLocaleDateString();
 };
 
-const TaskCard = ({ item, index, onDelete, onUpdate }) => {
+const TaskCard = ({ item, index, onDelete, onUpdate, isDimmed }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(item.content);
-  const [showUrgencyMenu, setShowUrgencyMenu] = useState(false);
+  const [menuPosition, setMenuPosition] = useState(null);
+  const badgeRef = useRef(null);
+  const menuRef = useRef(null);
+
+  const showPriorityMenu = menuPosition !== null;
+
+  const toggleMenu = () => {
+    if (showPriorityMenu) {
+      setMenuPosition(null);
+      return;
+    }
+    const rect = badgeRef.current.getBoundingClientRect();
+    setMenuPosition({ top: rect.bottom + 4, left: rect.left });
+  };
+
+  useEffect(() => {
+    if (!showPriorityMenu) return;
+
+    const handleClickOutside = (e) => {
+      if (
+        badgeRef.current &&
+        !badgeRef.current.contains(e.target) &&
+        menuRef.current &&
+        !menuRef.current.contains(e.target)
+      ) {
+        setMenuPosition(null);
+      }
+    };
+    const closeMenu = () => setMenuPosition(null);
+
+    document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('scroll', closeMenu, true);
+    window.addEventListener('resize', closeMenu);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', closeMenu, true);
+      window.removeEventListener('resize', closeMenu);
+    };
+  }, [showPriorityMenu]);
 
   const handleSave = () => {
     const trimmed = editedContent.trim();
     if (trimmed && trimmed !== item.content) {
       onUpdate({ ...item, content: trimmed });
+    } else {
+      setEditedContent(item.content);
     }
     setIsEditing(false);
   };
 
-  const changeUrgency = (color) => {
+  const changePriority = (color) => {
     onUpdate({ ...item, color });
-    setShowUrgencyMenu(false);
+    setMenuPosition(null);
   };
+
+  const priority = priorityForColor(item.color);
+  const relativeTime = formatRelativeTime(item.createdAt);
 
   return (
     <Draggable draggableId={item.id} index={index}>
-      {(provided) => (
+      {(provided, snapshot) => (
         <div
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
+          className={`task-card${snapshot.isDragging ? ' is-dragging' : ''}${
+            isDimmed ? ' is-dimmed' : ''
+          }`}
           style={{
-            position: "relative",
-            userSelect: "none",
-            padding: 16,
-            marginBottom: 12,
-            backgroundColor: "#f9fafb",
-            borderRadius: "8px",
-            boxShadow: "0 2px 6px rgba(0,0,0,0.06)",
-            transition: "all 0.2s ease",
+            '--card-accent': item.color || 'transparent',
             ...provided.draggableProps.style,
           }}
         >
-          {/* Urgency dot & dropdown */}
-          <div style={{ position: "absolute", top: 10, left: 10 }}>
-            <div
-              onClick={() => setShowUrgencyMenu(prev => !prev)}
-              style={{
-                width: 14,
-                height: 14,
-                borderRadius: "50%",
-                backgroundColor: item.color || "gray",
-                cursor: "pointer",
-                border: "2px solid white",
-                boxShadow: "0 0 0 1px #ccc",
-              }}
-              title="Click to change urgency"
-            />
-            {showUrgencyMenu && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: 20,
-                  left: 0,
-                  background: "#fff",
-                  border: "1px solid #ddd",
-                  borderRadius: "6px",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                  zIndex: 10,
-                  padding: "4px 0",
-                  minWidth: 100,
-                }}
+          <div className="task-card-top">
+            <div className="priority-picker">
+              <button
+                type="button"
+                ref={badgeRef}
+                className="priority-badge"
+                onClick={toggleMenu}
+                title="Change priority"
+                style={
+                  priority
+                    ? { '--tag-color': priority.color, '--tag-soft': `${priority.color}26` }
+                    : undefined
+                }
               >
-                {Object.entries(urgencyOptions).map(([level, color]) => (
+                {priority ? priority.code : 'NONE'}
+              </button>
+              {showPriorityMenu &&
+                createPortal(
                   <div
-                    key={level}
-                    onClick={() => changeUrgency(color)}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      padding: "6px 10px",
-                      cursor: "pointer",
-                      fontSize: "0.85rem",
-                      color: "#333",
-                      transition: "background 0.2s",
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = "#f0f0f0"}
-                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                    className="priority-menu"
+                    ref={menuRef}
+                    style={{ top: menuPosition.top, left: menuPosition.left }}
                   >
-                    <div style={{
-                      width: 10,
-                      height: 10,
-                      borderRadius: "50%",
-                      backgroundColor: color,
-                      marginRight: 8,
-                    }} />
-                    {level}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Content + Delete */}
-          <div style={{
-            marginLeft: 30,
-            paddingRight: 24,
-            display: "flex",
-            flexDirection: "row",
-            alignItems: "flex-start",
-            gap: 8,
-          }}>
-            <div style={{ flex: 1 }}>
-              {isEditing ? (
-                <input
-                  autoFocus
-                  value={editedContent}
-                  onChange={(e) => setEditedContent(e.target.value)}
-                  onBlur={handleSave}
-                  onKeyDown={(e) => e.key === "Enter" && handleSave()}
-                  style={{
-                    width: "100%",
-                    border: "1px solid #ccc",
-                    padding: "6px",
-                    borderRadius: "4px",
-                    fontSize: "0.9rem",
-                  }}
-                />
-              ) : (
-                <div
-                  onDoubleClick={() => setIsEditing(true)}
-                  style={{
-                    color: "#111",
-                    wordBreak: "break-word",
-                    whiteSpace: "pre-wrap",
-                    fontSize: "0.95rem",
-                  }}
-                >
-                  {item.content}
-                </div>
-              )}
+                    {PRIORITIES.map(({ label, code, color }) => (
+                      <div
+                        key={label}
+                        className="priority-menu-item"
+                        style={{ '--item-color': color }}
+                        onClick={() => changePriority(color)}
+                      >
+                        {code}
+                      </div>
+                    ))}
+                  </div>,
+                  document.body
+                )}
             </div>
 
-            <button
-              onClick={onDelete}
-              aria-label="Delete task"
-              title="Delete"
-              style={{
-                background: "none",
-                border: "none",
-                color: "#ef4444",
-                fontSize: "1.1rem",
-                cursor: "pointer",
-                padding: 0,
-              }}
-            >
-              ✖
-            </button>
+            <div className="task-card-actions">
+              <button
+                className="task-card-action-btn"
+                onClick={() => setIsEditing(true)}
+                aria-label="Edit task"
+                title="Edit"
+              >
+                <PencilIcon width={13} height={13} />
+              </button>
+              <button
+                className="task-card-action-btn danger"
+                onClick={onDelete}
+                aria-label="Delete task"
+                title="Delete"
+              >
+                <TrashIcon width={13} height={13} />
+              </button>
+            </div>
           </div>
+
+          {isEditing ? (
+            <textarea
+              autoFocus
+              className="task-card-edit-input"
+              value={editedContent}
+              onChange={(e) => setEditedContent(e.target.value)}
+              onBlur={handleSave}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSave();
+                }
+                if (e.key === 'Escape') {
+                  setEditedContent(item.content);
+                  setIsEditing(false);
+                }
+              }}
+            />
+          ) : (
+            <div className="task-card-content" onDoubleClick={() => setIsEditing(true)}>
+              {item.content}
+            </div>
+          )}
+
+          {relativeTime && <div className="task-card-meta">{relativeTime}</div>}
         </div>
       )}
     </Draggable>
